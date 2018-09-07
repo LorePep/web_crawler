@@ -68,6 +68,19 @@ func TestGetLinksFromURL(t *testing.T) {
 	}
 }
 
+func TestIsLinkValid(t *testing.T) {
+	testcases := []struct{
+		name string
+		input string
+		expected bool
+	}
+	{
+		{
+			name: "emp",
+		}
+	}
+}
+
 func areLinksEqual(ls1, ls2 []string) bool {
 	if len(ls1) != len(ls2) {
 		return false
@@ -115,6 +128,10 @@ func startMockServerOrFail(t *testing.T) *httptest.Server {
 	mux.HandleFunc("/nolinks",
 		func(w http.ResponseWriter, req *http.Request) {
 			templates.ExecuteTemplate(w, "nolinks.gohtml", nil)
+		})
+	mux.HandleFunc("/forbidden",
+		func(w http.ResponseWriter, req *http.Request) {
+			http.Error(w, "thou shall not pass", http.StatusForbidden)
 		})
 
 	return httptest.NewServer(mux)

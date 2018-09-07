@@ -31,12 +31,12 @@ func main() {
 			if _, ok := siteMap[link]; !ok {
 				siteMap[link] = struct{}{}
 				toCrawlCount++
+				tokens <- struct{}{}
+
 				go func(link string) {
-					tokens <- struct{}{}
 					foundLinks, _ := getLinksFromURL(link)
-					filteredLinks := filterLinks(startingURL, foundLinks)
-					if filteredLinks != nil {
-						urlsToCrawl <- filteredLinks
+					if foundLinks != nil {
+						urlsToCrawl <- foundLinks
 					}
 					<-tokens
 				}(link)
@@ -47,22 +47,18 @@ func main() {
 	fmt.Println(siteMap)
 }
 
-func filterLinks(root string, links []string) []string {
-	filtered := []string{}
-
-	for _, l := range links {
-		if len(l) > 0 {
-			if l[0] == '/' {
-				filtered = append(filtered, root+l)
-			}
+func isLinkValid(l string) bool {
+	if len(l) > 0 {
+		if l[0] == '/' {
+			return true
 		}
 	}
 
-	return filtered
-
+	return false
 }
 
 func getLinksFromURL(url string) ([]string, error) {
+	// Implement retry
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
@@ -82,7 +78,9 @@ func getLinksFromURL(url string) ([]string, error) {
 			if token.Data == "a" {
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						links = append(links, attr.Val)
+						if isLinkValid(attr.Val) {
+							links = append(links, attr.Val)
+						}
 					}
 				}
 			}
