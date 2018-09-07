@@ -5,38 +5,117 @@ import (
 	"html/template"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"testing"
 )
 
-var fixtureTemplate = `<a href="{{.}}">Something</a>`
+var templates *template.Template
+
+func init() {
+	templates = template.Must(template.ParseGlob("templates/*"))
+}
 
 func TestGetLinksFromURL(t *testing.T) {
 	ts := startMockServerOrFail(t)
 	defer ts.Close()
 
-	links, err := getLinksFromURL(ts.URL)
-	if err != nil {
-		t.Fail()
+	testcases := []struct {
+		name     string
+		url      string
+		expected []string
+	}{
+		{
+			name:     "no_links",
+			url:      ts.URL + "/nolinks",
+			expected: []string{},
+		},
+		{
+			name:     "one_link",
+			url:      ts.URL,
+			expected: []string{"/twolinks"},
+		},
+		{
+			name:     "two_links",
+			url:      ts.URL + "/twolinks",
+			expected: []string{"/", "/nolinks"},
+		},
+		// {
+		// 	// TODO how to treat redirects??
+		// 	name:     "temporary_redirect",
+		// 	url:      ts.URL + "/redirect",
+		// 	expected: []string{"/"},
+		// },
+		// {
+		// 	// TODO how to treat redirects??
+		// 	name:     "moved_permanently",
+		// 	url:      ts.URL + "/movedpermanently",
+		// 	expected: []string{"/"},
+		// },
 	}
-	if len(links) != 1 {
-		fmt.Printf("expected 1 link, got %d", len(links))
-		t.Fail()
-	}
-	if links[0] != "oneLink.com" {
-		fmt.Printf("expected oneLink.com, got %s", links[0])
-		t.Fail()
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, err := getLinksFromURL(tt.url)
+			if err != nil {
+				fmt.Printf("expected nil error, got: %s\n", err)
+				t.Fail()
+			}
+			if !areLinksEqual(tt.expected, actual) {
+				fmt.Printf("expected %v, got: %v\n", tt.expected, actual)
+				t.Fail()
+			}
+		})
 	}
 }
 
-func startMockServerOrFail(t *testing.T) *httptest.Server {
-	tmpl, err := template.New("page").Parse(fixtureTemplate)
-	if err != nil {
-		t.Fatal()
+func areLinksEqual(ls1, ls2 []string) bool {
+	if len(ls1) != len(ls2) {
+		return false
+	}
+	sort.Strings(ls1)
+	sort.Strings(ls2)
+
+	for i := range ls1 {
+		if ls1[i] != ls2[i] {
+			return false
+		}
 	}
 
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		tmpl.Execute(w, "oneLink.com")
-	}))
+	return true
+}
 
-	return ts
+func startMockServerOrFail(t *testing.T) *httptest.Server {
+	mux := http.NewServeMux()
+
+	mux.Handle("/favicon.ico", http.NotFoundHandler())
+	mux.HandleFunc("/",
+		func(w http.ResponseWriter, req *http.Request) {
+			templates.ExecuteTemplate(w, "index.gohtml", nil)
+		})
+	mux.HandleFunc("/twolinks",
+		func(w http.ResponseWriter, req *http.Request) {
+			templates.ExecuteTemplate(w, "twolinks.gohtml", nil)
+		})
+	mux.HandleFunc("/outofdomain",
+		func(w http.ResponseWriter, req *http.Request) {
+			templates.ExecuteTemplate(w, "outofdomain.gohtml", nil)
+		})
+	mux.HandleFunc("/redirect",
+		func(w http.ResponseWriter, req *http.Request) {
+			http.Redirect(w, req, "/", http.StatusSeeOther)
+		})
+	mux.HandleFunc("/relative",
+		func(w http.ResponseWriter, req *http.Request) {
+			templates.ExecuteTemplate(w, "relativelinks.gohtml", nil)
+		})
+	mux.HandleFunc("/movedpermanently",
+		func(w http.ResponseWriter, req *http.Request) {
+			http.Redirect(w, req, "/nolinks", http.StatusMovedPermanently)
+		})
+	mux.HandleFunc("/nolinks",
+		func(w http.ResponseWriter, req *http.Request) {
+			templates.ExecuteTemplate(w, "nolinks.gohtml", nil)
+		})
+
+	return httptest.NewServer(mux)
 }
