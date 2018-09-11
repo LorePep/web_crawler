@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"mime"
 	"net/http"
 	"os"
+	"strings"
 
 	"golang.org/x/net/html"
 )
@@ -11,6 +13,18 @@ import (
 const defaultMaxConcurrency = 4
 
 var siteMap = make(map[string]struct{})
+
+var defaultSupportedMimeTypes = make(map[string]struct{})
+
+func init() {
+	defaultSupportedMimeTypes[".html"] = struct{}{}
+	defaultSupportedMimeTypes[".htm"] = struct{}{}
+	defaultSupportedMimeTypes[".asp"] = struct{}{}
+	defaultSupportedMimeTypes[".aspx"] = struct{}{}
+	defaultSupportedMimeTypes[".php"] = struct{}{}
+	defaultSupportedMimeTypes[".jsp"] = struct{}{}
+	defaultSupportedMimeTypes[".jspx"] = struct{}{}
+}
 
 func main() {
 	if len(os.Args) < 2 {
@@ -58,14 +72,18 @@ func isLinkValid(l string) bool {
 }
 
 func getLinksFromURL(url string) ([]string, error) {
-	// Implement retry
+	var links []string
+
 	resp, err := http.Get(url)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var links []string
+	if !isValidContentType(resp) {
+		return links, nil
+	}
+
 	tokenizer := html.NewTokenizer(resp.Body)
 	for {
 		tt := tokenizer.Next()
@@ -86,6 +104,31 @@ func getLinksFromURL(url string) ([]string, error) {
 			}
 		}
 	}
+}
+
+func isValidContentType(resp *http.Response) bool {
+	contentType := resp.Header.Get("Content-type")
+	if contentType == "" {
+		return false
+	}
+
+	for _, v := range strings.Split(contentType, ",") {
+		t, _, err := mime.ParseMediaType(v)
+		fmt.Println("type ", t)
+		if err != nil {
+			break
+		}
+		if isTypeValid(t) {
+			return true
+		}
+	}
+	return false
+
+}
+
+func isTypeValid(t string) bool {
+	_, ok := defaultSupportedMimeTypes[t]
+	return ok
 }
 
 func printUsage() {

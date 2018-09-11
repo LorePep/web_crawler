@@ -68,17 +68,9 @@ func TestGetLinksFromURL(t *testing.T) {
 	}
 }
 
-func TestIsLinkValid(t *testing.T) {
-	testcases := []struct{
-		name string
-		input string
-		expected bool
-	}
-	{
-		{
-			name: "emp",
-		}
-	}
+func TestIsValidContentType(t *testing.T) {
+	resp, _ := http.Get("www.monzo.com")
+	fmt.Println(isValidContentType(resp))
 }
 
 func areLinksEqual(ls1, ls2 []string) bool {
