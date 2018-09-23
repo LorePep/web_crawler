@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -36,12 +37,13 @@ func main() {
 			if _, ok := siteMap[link]; !ok {
 				siteMap[link] = struct{}{}
 				toCrawlCount++
-				tokens <- struct{}{}
 
 				go func(link string) {
+					tokens <- struct{}{}
 					foundLinks, _ := getLinksFromURL(link)
-					if foundLinks != nil {
-						urlsToCrawl <- foundLinks
+					sanitized := sanitizeLinks(foundLinks, link)
+					if len(sanitized) > 0 {
+						urlsToCrawl <- sanitized
 					}
 					<-tokens
 				}(link)
@@ -52,14 +54,32 @@ func main() {
 	fmt.Println(siteMap)
 }
 
-func isLinkValid(l string) bool {
-	if len(l) > 0 {
-		if l[0] == '/' {
-			return true
+func sanitizeLinks(links []string, base string) []string {
+	sanitized := make([]string, 0)
+
+	for _, link := range links {
+		url, err := url.Parse(link)
+		if err != nil {
+			continue
 		}
+		baseURL, err := url.Parse(base)
+		if err != nil {
+			continue
+		}
+		url = baseURL.ResolveReference(url)
+		sanitized = append(sanitized, normalizeURL(url.String()))
 	}
 
-	return false
+	return sanitized
+}
+
+func normalizeURL(url string) string {
+	if url[len(url)-1] == '/' {
+		url = url[:len(url)-1]
+	}
+
+	return strings.ToLower(url)
+
 }
 
 func getLinksFromURL(url string) ([]string, error) {
@@ -92,9 +112,7 @@ func getLinksFromBody(body io.ReadCloser) []string {
 			if token.Data == "a" {
 				for _, attr := range token.Attr {
 					if attr.Key == "href" {
-						if isLinkValid(attr.Val) {
-							links = append(links, attr.Val)
-						}
+						links = append(links, attr.Val)
 					}
 				}
 			}
