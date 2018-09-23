@@ -15,6 +15,90 @@ func init() {
 	templates = template.Must(template.ParseGlob("templates/*"))
 }
 
+func TestIsValidContentType(t *testing.T) {
+	ts := startMockServerOrFail(t)
+	defer ts.Close()
+
+	testcases := []struct {
+		name        string
+		contentType string
+		expected    bool
+	}{
+		{
+			name:        "no_content_type",
+			contentType: "",
+			expected:    false,
+		},
+		{
+			name:        "empty",
+			contentType: "",
+			expected:    false,
+		},
+		{
+			name:        "html",
+			contentType: "text/html;",
+			expected:    true,
+		},
+		{
+			name:        "pdf",
+			contentType: "application/pdf;",
+			expected:    false,
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			header := http.Header{}
+			if tt.name != "no_content_type" {
+				header.Set("Content-Type", tt.contentType)
+			}
+			actual := isValidContentType(&header)
+			if tt.expected != actual {
+				t.Errorf("isValidContentType: expected %v, got: %v", tt.expected, actual)
+			}
+		})
+	}
+}
+
+func TestParseContentType(t *testing.T) {
+	testcases := []struct {
+		name     string
+		input    string
+		expected string
+	}{
+		{
+			name:     "empty_string",
+			input:    "",
+			expected: "",
+		},
+		{
+			name:     "only_type",
+			input:    "foo/bar",
+			expected: "foo/bar",
+		},
+		{
+			name:     "only_type_semicolumn",
+			input:    "foo/bar;",
+			expected: "foo/bar",
+		},
+		{
+			name:     "type_and_charset",
+			input:    "foo/bar; foo",
+			expected: "foo/bar",
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := parseContentType(tt.input)
+			if tt.expected != actual {
+				t.Errorf("parseContentType(%s): expected %s, got: %s", tt.input, tt.expected, actual)
+			}
+		})
+	}
+
+}
+
 func TestGetLinksFromURL(t *testing.T) {
 	ts := startMockServerOrFail(t)
 	defer ts.Close()
@@ -66,11 +150,6 @@ func TestGetLinksFromURL(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestIsValidContentType(t *testing.T) {
-	resp, _ := http.Get("www.monzo.com")
-	fmt.Println(isValidContentType(resp))
 }
 
 func areLinksEqual(ls1, ls2 []string) bool {
