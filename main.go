@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -35,6 +36,13 @@ func main() {
 		list := <-urlsToCrawl
 		for _, link := range list {
 			if _, ok := siteMap[link]; !ok {
+				isExternal, err := isExternalDomain(link, rootURL)
+				if err != nil {
+					log.Fatalf("Error parsing url: %s", err)
+				}
+				if isExternal {
+					continue
+				}
 				siteMap[link] = struct{}{}
 				toCrawlCount++
 
@@ -52,6 +60,20 @@ func main() {
 	}
 
 	fmt.Println(siteMap)
+}
+
+func isExternalDomain(link, root string) (bool, error) {
+	u, err := url.Parse(link)
+	if err != nil {
+		return false, err
+	}
+
+	r, err := url.Parse(root)
+	if err != nil {
+		return false, err
+	}
+
+	return r.Hostname() != u.Hostname(), nil
 }
 
 func sanitizeLinks(links []string, base string) []string {
