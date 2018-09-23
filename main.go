@@ -96,12 +96,13 @@ func sanitizeLinks(links []string, base string) []string {
 }
 
 func normalizeURL(url string) string {
-	if url[len(url)-1] == '/' {
-		url = url[:len(url)-1]
+	if len(url) > 0 {
+		if url[len(url)-1] == '/' {
+			url = url[:len(url)-1]
+		}
 	}
 
 	return strings.ToLower(url)
-
 }
 
 func getLinksFromURL(url string) ([]string, error) {

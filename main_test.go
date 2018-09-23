@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
 	"net/http/httptest"
@@ -99,6 +98,83 @@ func TestParseContentType(t *testing.T) {
 
 }
 
+func TestIsExternalDomain(t *testing.T) {
+	testcases := []struct {
+		name     string
+		link     string
+		root     string
+		expected bool
+	}{
+		{
+			name:     "external_domain",
+			link:     "https://www.foo.com/bar",
+			root:     "https://www.bar.com/foo",
+			expected: true,
+		},
+		{
+			name:     "internal_domain",
+			link:     "https://www.foo.com/bar",
+			root:     "https://www.foo.com/something",
+			expected: false,
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			actual, err := isExternalDomain(tt.link, tt.root)
+			if err != nil {
+				t.Errorf("isExternalDomain(%s): expected nil error, got: %s\n", tt.link, err)
+			}
+			if tt.expected != actual {
+				t.Errorf("isExternalDomain(%s), expected %v, got: %v\n", tt.link, tt.expected, actual)
+			}
+		})
+	}
+}
+
+func TestNormalizeURL(t *testing.T) {
+	testcases := []struct {
+		name     string
+		url      string
+		expected string
+	}{
+		{
+			name:     "empty_url",
+			url:      "",
+			expected: "",
+		},
+		{
+			name:     "no_trailing",
+			url:      "http://foo/bar",
+			expected: "http://foo/bar",
+		},
+		{
+			name:     "trailing",
+			url:      "http://foo/bar/",
+			expected: "http://foo/bar",
+		},
+		{
+			name:     "upper_cases_no_trailing",
+			url:      "http://Foo/Bar",
+			expected: "http://foo/bar",
+		},
+		{
+			name:     "upper_cases_trailing",
+			url:      "http://Foo/Bar/",
+			expected: "http://foo/bar",
+		},
+	}
+
+	for _, tt := range testcases {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := normalizeURL(tt.url)
+			if tt.expected != actual {
+				t.Errorf("normalizeURL(%s), expected %v, got: %v\n", tt.url, tt.expected, actual)
+			}
+		})
+	}
+}
+
 func TestGetLinksFromURL(t *testing.T) {
 	ts := startMockServerOrFail(t)
 	defer ts.Close()
@@ -141,12 +217,10 @@ func TestGetLinksFromURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			actual, err := getLinksFromURL(tt.url)
 			if err != nil {
-				fmt.Printf("expected nil error, got: %s\n", err)
-				t.Fail()
+				t.Errorf("getLinksFromURL(%s): expected nil error, got: %s\n", tt.url, err)
 			}
 			if !areLinksEqual(tt.expected, actual) {
-				fmt.Printf("expected %v, got: %v\n", tt.expected, actual)
-				t.Fail()
+				t.Errorf("getLinksFromURL(%s): expected %v, got: %v\n", tt.url, tt.expected, actual)
 			}
 		})
 	}
